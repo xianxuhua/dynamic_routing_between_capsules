@@ -27,7 +27,7 @@ import os
 import random
 
 import tensorflow as tf
-
+tf = tf.compat.v1
 
 def _read_and_decode(filename_queue, image_dim=28, distort=False,
                      split='train'):
@@ -70,7 +70,7 @@ def _read_and_decode(filename_queue, image_dim=28, distort=False,
       image = tf.reshape(image, [image_dim, image_dim])
       image = tf.random_crop(image, [cropped_dim, cropped_dim])
       # 0.26179938779 is 15 degress in radians
-      image = tf.contrib.image.rotate(image,
+      image = tf.image.rotate(image,
                                       random.uniform(-0.26179938779,
                                                      0.26179938779))
       image = tf.reshape(image, [cropped_dim, cropped_dim, 1])

@@ -23,7 +23,7 @@ import tensorflow as tf
 from models import model
 from models.layers import layers
 from models.layers import variables
-
+tf = tf.compat.v1
 
 class CapsuleModel(model.Model):
   """A multi GPU Model with capsule layers.
@@ -67,7 +67,7 @@ class CapsuleModel(model.Model):
     capsule1_3d = tf.reshape(capsule1_atom_last,
                              [tf.shape(input_tensor)[0], -1, 8])
     _, _, _, height, width = capsule1.get_shape()
-    input_dim = self._hparams.num_prime_capsules * height.value * width.value
+    input_dim = self._hparams.num_prime_capsules * height * width
     return layers.capsule(
         input_tensor=capsule1_3d,
         input_dim=input_dim,
@@ -138,7 +138,7 @@ class CapsuleModel(model.Model):
       targets.append((features['spare_label'], features['spare_image']))
 
     with tf.name_scope('recons'):
-      for i in xrange(features['num_targets']):
+      for i in range(features['num_targets']):
         label, image = targets[i]
         remakes.append(
             layers.reconstruction(

@@ -33,7 +33,7 @@ import abc
 import collections
 import tensorflow as tf
 from models.layers import layers
-
+tf = tf.compat.v1
 TowerResult = collections.namedtuple('TowerResult', ('inferred', 'almost',
                                                      'correct', 'grads'))
 JoinedResult = collections.namedtuple('JoinedResult', ('summary', 'train_op',
@@ -54,20 +54,20 @@ class Model(object):
       hparams: The hyperparameters for the model as tf.contrib.training.HParams.
     """
     self._hparams = hparams
-    with tf.device('/cpu:0'):
-      self._global_step = tf.get_variable(
-          'global_step', [],
-          initializer=tf.constant_initializer(0),
-          trainable=False)
+    # with tf.device('/gpu:0'):
+    self._global_step = tf.get_variable(
+      'global_step', [],
+      initializer=tf.constant_initializer(0),
+      trainable=False)
 
-      learning_rate = tf.train.exponential_decay(
-          learning_rate=hparams.learning_rate,
-          global_step=self._global_step,
-          decay_steps=hparams.decay_steps,
-          decay_rate=hparams.decay_rate)
-      learning_rate = tf.maximum(learning_rate, 1e-6)
+    learning_rate = tf.train.exponential_decay(
+      learning_rate=hparams.learning_rate,
+      global_step=self._global_step,
+      decay_steps=hparams.decay_steps,
+      decay_rate=hparams.decay_rate)
+    learning_rate = tf.maximum(learning_rate, 1e-6)
 
-      self._optimizer = tf.train.AdamOptimizer(learning_rate)
+    self._optimizer = tf.train.AdamOptimizer(learning_rate)
 
   @abc.abstractmethod
   def inference(self, features):
@@ -100,8 +100,8 @@ class Model(object):
       A namedtuple TowerResult containing the inferred values like logits and
       reconstructions, gradients and evaluation metrics.
     """
-    with tf.device('/gpu:%d' % tower_ind):
-      with tf.name_scope('tower_%d' % (tower_ind)) as scope:
+    # with tf.device('/gpu:%d' % tower_ind):
+    with tf.name_scope('tower_%d' % (tower_ind)) as scope:
         inferred = self.inference(feature)
         losses, correct, almost = layers.evaluate(
             logits=inferred.logits,
@@ -177,7 +177,7 @@ class Model(object):
     tower_grads = []
     inferred = []
     with tf.variable_scope(tf.get_variable_scope()):
-      for i in xrange(num_gpus):
+      for i in range(num_gpus):
         tower_output = self._single_tower(i, features[i])
         inferred.append(tower_output.inferred)
         almosts.append(tower_output.almost)

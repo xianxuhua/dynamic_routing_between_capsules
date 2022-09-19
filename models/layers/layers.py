@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+tf = tf.compat.v1
 
 from models.layers import variables
 
@@ -42,7 +43,7 @@ def _squash(input_tensor):
     A tensor with same shape as input (rank 3) for output of this layer.
   """
   with tf.name_scope('norm_non_linearity'):
-    norm = tf.norm(input_tensor, axis=2, keep_dims=True)
+    norm = tf.norm(input_tensor, axis=2, keepdims=True)
     norm_squared = norm * norm
     return (input_tensor / norm) * (norm_squared / (1 + norm_squared))
 
@@ -66,9 +67,9 @@ def _leaky_routing(logits, output_dim):
   # leak is a zero matrix with same shape as logits except dim(2) = 1 because
   # of the reduce_sum.
   leak = tf.zeros_like(logits, optimize=True)
-  leak = tf.reduce_sum(leak, axis=2, keep_dims=True)
+  leak = tf.reduce_sum(leak, axis=2, keepdims=True)
   leaky_logits = tf.concat([leak, logits], axis=2)
-  leaky_routing = tf.nn.softmax(leaky_logits, dim=2)
+  leaky_routing = tf.nn.softmax(leaky_logits, axis=2)
   return tf.split(leaky_routing, [1, output_dim], 2)[1]
 
 
@@ -107,7 +108,7 @@ def _update_routing(votes, biases, logit_shape, num_dims, input_dim, output_dim,
     if leaky:
       route = _leaky_routing(logits, output_dim)
     else:
-      route = tf.nn.softmax(logits, dim=2)
+      route = tf.nn.softmax(logits, axis=2)
     preactivate_unrolled = route * votes_trans
     preact_trans = tf.transpose(preactivate_unrolled, r_t_shape)
     preactivate = tf.reduce_sum(preact_trans, axis=1) + biases
@@ -243,8 +244,8 @@ def _depthwise_conv3d(input_tensor,
     input_tensor_reshaped = tf.reshape(input_tensor, [
         input_shape[0] * input_dim, input_atoms, input_shape[3], input_shape[4]
     ])
-    input_tensor_reshaped.set_shape((None, input_atoms, in_height.value,
-                                     in_width.value))
+    input_tensor_reshaped.set_shape((None, input_atoms, in_height,
+                                     in_width))
     conv = tf.nn.conv2d(
         input_tensor_reshaped,
         kernel,
@@ -261,7 +262,7 @@ def _depthwise_conv3d(input_tensor,
         conv_shape[3]
     ])
     conv_reshaped.set_shape((None, input_dim, output_dim, output_atoms,
-                             conv_height.value, conv_width.value))
+                             conv_height, conv_width))
     return conv_reshaped, conv_shape, input_shape
 
 
@@ -405,8 +406,8 @@ def evaluate(logits, labels, num_targets, scope, loss_type):
     with tf.name_scope('correct_prediction'):
       _, targets = tf.nn.top_k(labels, k=num_targets)
       _, predictions = tf.nn.top_k(logits, k=num_targets)
-      missed_targets = tf.contrib.metrics.set_difference(targets, predictions)
-      num_missed_targets = tf.contrib.metrics.set_size(missed_targets)
+      missed_targets = tf.sets.set_difference(targets, predictions)
+      num_missed_targets = tf.sets.set_size(missed_targets)
       correct = tf.equal(num_missed_targets, 0)
       almost_correct = tf.less(num_missed_targets, num_targets)
       correct_sum = tf.reduce_sum(tf.cast(correct, tf.float32))
@@ -418,7 +419,7 @@ def evaluate(logits, labels, num_targets, scope, loss_type):
   tf.summary.scalar('almost_correct_batch', almost_correct_sum)
   return total_loss, correct_sum, almost_correct_sum
 
-
+from models.layers.stack import stack
 def reconstruction(capsule_mask, num_atoms, capsule_embedding, layer_sizes,
                    num_pixels, reuse, image, balance_factor):
   """Adds the reconstruction loss and calculates the reconstructed image.
@@ -447,21 +448,20 @@ def reconstruction(capsule_mask, num_atoms, capsule_embedding, layer_sizes,
   capsule_mask_3d = tf.expand_dims(capsule_mask, -1)
   atom_mask = tf.tile(capsule_mask_3d, [1, 1, num_atoms])
   filtered_embedding = capsule_embedding * atom_mask
-  filtered_embedding_2d = tf.contrib.layers.flatten(filtered_embedding)
-  reconstruction_2d = tf.contrib.layers.stack(
+  filtered_embedding_2d = tf.layers.flatten(filtered_embedding)
+  reconstruction_2d = stack(
       inputs=filtered_embedding_2d,
-      layer=tf.contrib.layers.fully_connected,
+      layer=tf.layers.dense,
       stack_args=[(first_layer_size, tf.nn.relu),
                   (second_layer_size, tf.nn.relu),
                   (num_pixels, tf.sigmoid)],
       reuse=reuse,
-      scope='recons',
-      weights_initializer=tf.truncated_normal_initializer(
+      kernel_initializer=tf.truncated_normal_initializer(
           stddev=0.1, dtype=tf.float32),
-      biases_initializer=tf.constant_initializer(0.1))
+      bias_initializer=tf.constant_initializer(0.1))
 
   with tf.name_scope('loss'):
-    image_2d = tf.contrib.layers.flatten(image)
+    image_2d = tf.layers.flatten(image)
     distance = tf.pow(reconstruction_2d - image_2d, 2)
     loss = tf.reduce_sum(distance, axis=-1)
     batch_loss = tf.reduce_mean(loss)

@@ -24,7 +24,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-
+tf = tf.compat.v1
 
 def weight_variable(shape, stddev=0.1, verbose=False):
   """Creates a CPU variable with normal initialization. Adds summaries.
@@ -37,8 +37,8 @@ def weight_variable(shape, stddev=0.1, verbose=False):
   Returns:
     Weight variable tensor of shape=shape.
   """
-  with tf.device('/cpu:0'):
-    with tf.name_scope('weights'):
+  # with tf.device('/gpu:0'):
+  with tf.name_scope('weights'):
       weights = tf.get_variable(
           'weights',
           shape,
@@ -59,8 +59,8 @@ def bias_variable(shape, verbose=False):
   Returns:
     Bias variable tensor with shape=shape.
   """
-  with tf.device('/cpu:0'):
-    with tf.name_scope('biases'):
+  # with tf.device('/gpu:0'):
+  with tf.name_scope('biases'):
       biases = tf.get_variable(
           'biases',
           shape,

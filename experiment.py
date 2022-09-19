@@ -32,7 +32,7 @@ from input_data.mnist import mnist_input_record
 from input_data.norb import norb_input_record
 from models import capsule_model
 from models import conv_model
-
+tf = tf.compat.v1
 FLAGS = tf.flags.FLAGS
 
 tf.flags.DEFINE_string('data_dir', None, 'The data directory.')
@@ -91,7 +91,7 @@ def get_features(split, total_batch_size, num_gpus, data_dir, num_targets,
   batch_size = total_batch_size // max(1, num_gpus)
   features = []
   for i in range(num_gpus):
-    with tf.device('/gpu:%d' % i):
+    # with tf.device('/gpu:%d' % i):
       if dataset == 'mnist':
         features.append(
             mnist_input_record.inputs(
@@ -266,7 +266,9 @@ def run_experiment(loader,
     max_steps: Maximum number of experiment iterations.
     save_step: How often the training model should be saved.
   """
-  session = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+  config = tf.ConfigProto(allow_soft_placement=True)
+  config.gpu_options.allow_growth = True
+  session = tf.Session(config=config)
   init_op = tf.group(tf.global_variables_initializer(),
                      tf.local_variables_initializer())
   session.run(init_op)
@@ -322,11 +324,6 @@ def train(hparams, summary_dir, num_gpus, model_type, max_steps, save_step,
     model = models[model_type](hparams)
     result, _ = model.multi_gpu(features, num_gpus)
     # Print stats
-    param_stats = tf.contrib.tfprof.model_analyzer.print_model_analysis(
-        tf.get_default_graph(),
-        tfprof_options=tf.contrib.tfprof.model_analyzer.
-        TRAINABLE_VARS_PARAMS_STAT_OPTIONS)
-    sys.stdout.write('total_params: %d\n' % param_stats.total_parameters)
     writer = tf.summary.FileWriter(summary_dir)
     run_experiment(load_training, summary_dir, writer, train_experiment, result,
                    max_steps, save_step)
@@ -512,7 +509,9 @@ def evaluate_ensemble(hparams, model_type, eval_size, data_dir, num_targets,
                             dataset)[0]
     model = models[model_type](hparams)
 
-    session = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+    config = tf.ConfigProto(allow_soft_placement=True)
+    config.gpu_options.allow_growth = True
+    session = tf.Session(config=config)
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=session, coord=coord)
     num_steps = eval_size // batch_size
@@ -532,9 +531,11 @@ def evaluate_ensemble(hparams, model_type, eval_size, data_dir, num_targets,
         total_wrong, total_wrong / eval_size * 100))
 
 
+from models.hp import HParams
+
 def default_hparams():
   """Builds an HParam object with default hyperparameters."""
-  return tf.contrib.training.HParams(
+  return HParams(
       decay_rate=0.96,
       decay_steps=2000,
       leaky=False,
